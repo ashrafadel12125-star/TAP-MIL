@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TempMail Pro - بريد إلكتروني مؤقت حر</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <!-- Navigation Bar -->
+    <nav class="navbar navbar-dark bg-gradient sticky-top">
+        <div class="container-fluid">
+            <a class="navbar-brand fw-bold" href="#">
+                <i class="fas fa-envelope"></i> TempMail Pro
+            </a>
+            <span class="navbar-text text-light">بريد إلكتروني مؤقت آمن وسريع</span>
+        </div>
+    </nav>
+
+    <!-- Main Container -->
+    <div class="container-fluid main-container">
+        <div class="row">
+            <!-- Left Sidebar - Email Controls -->
+            <div class="col-lg-3 sidebar-section">
+                <div class="control-card">
+                    <h5 class="mb-4"><i class="fas fa-cog"></i> التحكم</h5>
+                    
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">بريدك المؤقت</label>
+                        <div class="input-group input-group-lg">
+                            <input type="text" class="form-control" id="emailInput" readonly>
+                            <button class="btn btn-primary" id="copyBtn" title="نسخ البريد">
+                                <i class="fas fa-copy"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="d-grid gap-2 mb-3">
+                        <button class="btn btn-success btn-lg" id="refreshBtn">
+                            <i class="fas fa-sync-alt"></i> توليد بريد جديد
+                        </button>
+                        <button class="btn btn-warning btn-lg" id="changeEmailBtn">
+                            <i class="fas fa-exchange-alt"></i> تغيير البريد
+                        </button>
+                        <button class="btn btn-danger btn-lg" id="deleteEmailBtn">
+                            <i class="fas fa-trash"></i> حذف البريد
+                        </button>
+                    </div>
+
+                    <div class="mb-3">
+                        <button class="btn btn-info w-100 btn-lg" id="autoRefreshBtn">
+                            <i class="fas fa-clock"></i> تحديث تلقائي
+                        </button>
+                    </div>
+
+                    <!-- Info Section -->
+                    <div class="info-box">
+                        <h6><i class="fas fa-info-circle"></i> معلومات</h6>
+                        <p class="small mb-2">
+                            <strong>الوقت المتبقي:</strong><br>
+                            <span id="timeRemaining">جاري التحميل...</span>
+                        </p>
+                        <p class="small">
+                            <strong>الرسائل:</strong><br>
+                            <span id="messageCount">0</span> رسالة
+                        </p>
+                    </div>
+                </div>
+
+                <!-- Ad Space 1 -->
+                <div class="ad-space mt-4">
+                    <div id="ad-space-1" class="ad-container">
+                        <!-- Google AdSense placeholder -->
+                        <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-xxxxxxxxxxxxxxxx"
+                            crossorigin="anonymous"></script>
+                        <ins class="adsbygoogle"
+                            style="display:block"
+                            data-ad-client="ca-pub-xxxxxxxxxxxxxxxx"
+                            data-ad-slot="1234567890"
+                            data-ad-format="auto"
+                            data-full-width-responsive="true"></ins>
+                        <script>
+                            (adsbygoogle = window.adsbygoogle || []).push({});
+                        </script>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right Section - Emails/Messages -->
+            <div class="col-lg-9">
+                <!-- Email List Section -->
+                <div class="card email-section">
+                    <div class="card-header bg-gradient d-flex justify-content-between align-items-center">
+                        <h4 class="mb-0"><i class="fas fa-inbox"></i> الرسائل الواردة</h4>
+                        <small id="lastUpdate" class="text-muted">آخر تحديث: الآن</small>
+                    </div>
+                    <div class="card-body" id="emailsContainer">
+                        <div class="text-center text-muted">
+                            <i class="fas fa-hourglass-start fa-3x mb-3"></i>
+                            <p>انتظر استقبال الرسائل...</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Email Details Section -->
+                <div class="card email-details mt-4" style="display: none;">
+                    <div class="card-header bg-gradient">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <h4 class="mb-0"><i class="fas fa-envelope-open"></i> تفاصيل الرسالة</h4>
+                            <button class="btn btn-sm btn-secondary" id="closeDetailsBtn">
+                                <i class="fas fa-times"></i> إغلاق
+                            </button>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <div class="mb-3">
+                            <strong>من:</strong>
+                            <p id="emailFrom" class="text-primary"></p>
+                        </div>
+                        <div class="mb-3">
+                            <strong>الموضوع:</strong>
+                            <p id="emailSubject"></p>
+                        </div>
+                        <div class="mb-3">
+                            <strong>التاريخ:</strong>
+                            <p id="emailDate"></p>
+                        </div>
+                        <hr>
+                        <div class="email-body">
+                            <strong>المحتوى:</strong>
+                            <div id="emailBody" class="mt-2"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Ad Space 2 -->
+                <div class="ad-space mt-4">
+                    <div id="ad-space-2" class="ad-container">
+                        <!-- Google AdSense placeholder -->
+                        <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-xxxxxxxxxxxxxxxx"
+                            crossorigin="anonymous"></script>
+                        <ins class="adsbygoogle"
+                            style="display:block"
+                            data-ad-client="ca-pub-xxxxxxxxxxxxxxxx"
+                            data-ad-slot="0987654321"
+                            data-ad-format="auto"
+                            data-full-width-responsive="true"></ins>
+                        <script>
+                            (adsbygoogle = window.adsbygoogle || []).push({});
+                        </script>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <footer class="bg-dark text-light py-4 mt-5">
+        <div class="container">
+            <div class="row">
+                <div class="col-md-4">
+                    <h6>عن TempMail Pro</h6>
+                    <p class="small">موقع آمن لتوليد بريد إلكتروني مؤقت بدون الحاجة للتسجيل</p>
+                </div>
+                <div class="col-md-4">
+                    <h6>الميزات</h6>
+                    <ul class="list-unstyled small">
+                        <li><i class="fas fa-check"></i> بريد مؤقت آمن</li>
+                        <li><i class="fas fa-check"></i> لا يتطلب تسجيل</li>
+                        <li><i class="fas fa-check"></i> واجهة عصرية</li>
+                    </ul>
+                </div>
+                <div class="col-md-4">
+                    <h6>التواصل</h6>
+                    <p class="small">© 2026 TempMail Pro - جميع الحقوق محفوظة</p>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <!-- Toast Notification -->
+    <div class="toast-container position-fixed bottom-0 start-0 p-3">
+        <div id="toastNotification" class="toast" role="alert">
+            <div class="toast-header">
+                <strong class="me-auto">إشعار</strong>
+                <button type="button" class="btn-close" data-bs-dismiss="toast"></button>
+            </div>
+            <div class="toast-body" id="toastBody">
+            </div>
+        </div>
+    </div>
+
+    <!-- Loading Modal -->
+    <div class="modal fade" id="loadingModal" tabindex="-1" backdrop="static" keyboard="false">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-body text-center py-5">
+                    <div class="spinner-border text-primary mb-3" role="status">
+                        <span class="visually-hidden">جاري التحميل...</span>
+                    </div>
+                    <p id="loadingText">جاري التحميل...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="script.js"></script>
+</body>
+</html>
