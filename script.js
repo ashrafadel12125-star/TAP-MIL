@@ -1,313 +1,270 @@
 // =============== CONFIGURATION ===============
-const API_DOMAIN = 'https://api.mailgw.com';
+const API_DOMAIN = 'https://api.mail.gw';
+const CORS_PROXY = 'https://cors-anywhere.herokuapp.com/';
 const DOMAINS_ENDPOINT = `${API_DOMAIN}/domains`;
 const ACCOUNTS_ENDPOINT = `${API_DOMAIN}/accounts`;
 const MESSAGES_ENDPOINT = `${API_DOMAIN}/messages`;
 
 // =============== GLOBAL VARIABLES ===============
-let currentEmail = null;
-let currentToken = null;
-let currentAccountId = null;
-let autoRefreshInterval = null;
+let currentEmail = '';
+let currentEmailId = '';
+let currentToken = '';
+let currentPassword = '';
 let messageRefreshInterval = null;
-let selectedEmailId = null;
-let emailExpireTime = null;
-let autoRefreshActive = false;
+let autoRefreshEnabled = false;
+let availableDomains = [];
 
-// =============== INITIALIZE APP ===============
-document.addEventListener('DOMContentLoaded', () => {
-    initializeApp();
+// =============== INITIALIZATION ===============
+document.addEventListener('DOMContentLoaded', async function() {
+    console.log('تحميل الصفحة...');
+    
+    // Load UI elements
     setupEventListeners();
-});
-
-async function initializeApp() {
-    showLoading('جاري إنشاء بريد جديد...');
+    loadEmailFromStorage();
+    
+    // Try to fetch available domains
     try {
-        await generateNewEmail();
-        startMessageRefresh();
+        await fetchAvailableDomains();
     } catch (error) {
-        console.error('Error initializing app:', error);
-        showToast('حدث خطأ في تهيئة التطبيق', 'error');
-    } finally {
-        hideLoading();
+        console.warn('تحذير: لم تتمكن من جلب النطاقات المتاحة', error);
+        // Use default domain as fallback
+        availableDomains = [{ domain: 'mail.gw', id: '1' }];
     }
-}
+    
+    // If no email saved, create a new one
+    if (!currentEmail) {
+        await createNewEmail();
+    } else {
+        document.getElementById('emailInput').value = currentEmail;
+        loadMessages();
+    }
+});
 
 // =============== EVENT LISTENERS ===============
 function setupEventListeners() {
-    // Buttons
-    document.getElementById('copyBtn').addEventListener('click', copyEmail);
-    document.getElementById('refreshBtn').addEventListener('click', () => generateNewEmail());
-    document.getElementById('changeEmailBtn').addEventListener('click', () => generateNewEmail());
-    document.getElementById('deleteEmailBtn').addEventListener('click', deleteCurrentEmail);
-    document.getElementById('autoRefreshBtn').addEventListener('click', toggleAutoRefresh);
-    document.getElementById('closeDetailsBtn').addEventListener('click', closeEmailDetails);
-
-    // Email list click
-    document.addEventListener('click', (e) => {
-        const emailItem = e.target.closest('.email-item');
-        if (emailItem) {
-            const emailId = emailItem.dataset.messageId;
-            viewEmailDetails(emailId);
-        }
-    });
+    document.getElementById('refreshBtn').addEventListener('click', createNewEmail);
+    document.getElementById('copyBtn').addEventListener('click', copyEmailToClipboard);
+    
+    const autoRefreshCheckbox = document.getElementById('autoRefreshCheckbox');
+    if (autoRefreshCheckbox) {
+        autoRefreshCheckbox.addEventListener('change', toggleAutoRefresh);
+    }
 }
 
-// =============== EMAIL GENERATION ===============
-async function generateNewEmail() {
-    showLoading('جاري توليد بريد جديد...');
+// =============== CREATE EMAIL ===============
+async function createNewEmail() {
     try {
-        // Get available domains
-        const domainsResponse = await fetch(DOMAINS_ENDPOINT);
-        if (!domainsResponse.ok) throw new Error('Failed to fetch domains');
+        showLoading('جاري إنشاء بريد جديد...');
         
-        const domainsData = await domainsResponse.json();
-        const domains = domainsData['hydra:member'];
+        // Fetch domains if not already loaded
+        if (availableDomains.length === 0) {
+            await fetchAvailableDomains();
+        }
         
-        if (!domains || domains.length === 0) {
+        if (availableDomains.length === 0) {
             throw new Error('لا توجد نطاقات متاحة');
         }
-
+        
         // Select random domain
-        const randomDomain = domains[Math.floor(Math.random() * domains.length)];
-        const domainName = randomDomain.domain;
-
+        const domain = availableDomains[Math.floor(Math.random() * availableDomains.length)];
+        
         // Generate random username
         const username = generateRandomUsername();
-        const email = `${username}@${domainName}`;
-
+        const password = generateRandomPassword();
+        
         // Create account
-        const accountResponse = await fetch(ACCOUNTS_ENDPOINT, {
+        const accountData = {
+            address: `${username}@${domain.domain}`,
+            password: password
+        };
+        
+        console.log('محاولة إنشاء حساب:', accountData.address);
+        
+        const response = await fetch(`${ACCOUNTS_ENDPOINT}`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
+                'Accept': 'application/json'
             },
-            body: JSON.stringify({
-                address: email
-            })
+            body: JSON.stringify(accountData),
+            mode: 'cors',
+            credentials: 'omit'
         });
-
-        if (!accountResponse.ok) {
-            throw new Error('Failed to create account');
-        }
-
-        const accountData = await accountResponse.json();
-        currentEmail = email;
-        currentToken = accountData.token;
-        currentAccountId = accountData.id;
         
-        // Set expiration time (usually 1 hour)
-        emailExpireTime = new Date(Date.now() + 60 * 60 * 1000);
-
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            throw new Error(`خطأ API: ${response.status} - ${errorData.message || response.statusText}`);
+        }
+        
+        const data = await response.json();
+        
+        // Store email info
+        currentEmail = data.address || accountData.address;
+        currentEmailId = data.id;
+        currentToken = data.token;
+        currentPassword = password;
+        
+        // Save to storage
+        saveEmailToStorage();
+        
         // Update UI
         document.getElementById('emailInput').value = currentEmail;
-        document.getElementById('emailsContainer').innerHTML = `
-            <div class="text-center text-muted">
-                <i class="fas fa-inbox fa-3x mb-3"></i>
-                <p>انتظر استقبال الرسائل...</p>
-            </div>
-        `;
-        document.getElementById('messageCount').textContent = '0';
-
-        showToast(`✓ تم إنشاء البريد: ${currentEmail}`, 'success');
         
-        // Clear message details
-        closeEmailDetails();
+        // Load messages after a small delay
+        setTimeout(() => {
+            loadMessages();
+        }, 1000);
         
-        // Refresh messages
-        await fetchMessages();
-        updateTimeRemaining();
-
-    } catch (error) {
-        console.error('Error generating email:', error);
-        showToast('فشل إنشاء البريد الإلكتروني', 'error');
-    } finally {
+        showToast(`✅ تم إنشاء البريد: ${currentEmail}`, 'success');
         hideLoading();
-    }
-}
-
-// =============== FETCH MESSAGES ===============
-async function fetchMessages() {
-    try {
-        if (!currentAccountId || !currentToken) return;
-
-        const response = await fetch(`${MESSAGES_ENDPOINT}?account=${currentAccountId}`, {
-            headers: {
-                'Authorization': `Bearer ${currentToken}`
-            }
-        });
-
-        if (!response.ok) throw new Error('Failed to fetch messages');
-
-        const data = await response.json();
-        const messages = data['hydra:member'] || [];
-
-        updateMessagesList(messages);
-        document.getElementById('messageCount').textContent = messages.length;
-        updateLastUpdate();
-
+        
     } catch (error) {
-        console.error('Error fetching messages:', error);
+        console.error('خطأ في إنشاء البريد:', error);
+        showToast(`❌ فشل إنشاء البريد: ${error.message}`, 'error');
+        hideLoading();
+        
+        // Retry option
+        setTimeout(() => {
+            const retry = confirm('هل تريد إعادة المحاولة؟');
+            if (retry) createNewEmail();
+        }, 2000);
     }
 }
 
-// =============== UPDATE MESSAGES LIST ===============
-function updateMessagesList(messages) {
-    const container = document.getElementById('emailsContainer');
+// =============== FETCH AVAILABLE DOMAINS ===============
+async function fetchAvailableDomains() {
+    try {
+        console.log('جلب النطاقات المتاحة...');
+        
+        const response = await fetch(DOMAINS_ENDPOINT, {
+            method: 'GET',
+            headers: {
+                'Accept': 'application/json'
+            },
+            mode: 'cors',
+            credentials: 'omit'
+        });
+        
+        if (!response.ok) {
+            throw new Error(`خطأ في جلب النطاقات: ${response.status}`);
+        }
+        
+        const data = await response.json();
+        
+        // Extract domains from response
+        if (data.hydra && data.hydra['member']) {
+            availableDomains = data.hydra['member'].filter(d => d.isActive);
+        } else if (Array.isArray(data)) {
+            availableDomains = data.filter(d => d.isActive || !d.isActive === undefined);
+        } else {
+            availableDomains = [];
+        }
+        
+        console.log('النطاقات المتاحة:', availableDomains);
+        
+        if (availableDomains.length === 0) {
+            console.warn('لم يتم العثور على نطاقات نشطة');
+        }
+        
+        return availableDomains;
+        
+    } catch (error) {
+        console.error('خطأ في جلب النطاقات:', error);
+        // Default fallback domains
+        availableDomains = [
+            { domain: 'mail.gw', id: '1', isActive: true }
+        ];
+        return availableDomains;
+    }
+}
 
+// =============== LOAD MESSAGES ===============
+async function loadMessages() {
+    try {
+        if (!currentEmail || !currentEmailId) {
+            console.log('لا يوجد بريد حالي');
+            return;
+        }
+        
+        console.log('جلب الرسائل للبريد:', currentEmail);
+        
+        const url = `${MESSAGES_ENDPOINT}?query={"to":"${currentEmail}"}`;
+        
+        const response = await fetch(url, {
+            method: 'GET',
+            headers: {
+                'Accept': 'application/json',
+                'Authorization': `Bearer ${currentToken}` // If token needed
+            },
+            mode: 'cors',
+            credentials: 'omit'
+        });
+        
+        if (!response.ok) {
+            if (response.status === 404) {
+                console.log('لا توجد رسائل حتى الآن');
+                displayMessages([]);
+                return;
+            }
+            throw new Error(`خطأ: ${response.status}`);
+        }
+        
+        const data = await response.json();
+        
+        let messages = [];
+        if (data.hydra && data.hydra['member']) {
+            messages = data.hydra['member'];
+        } else if (Array.isArray(data)) {
+            messages = data;
+        }
+        
+        console.log('عدد الرسائل:', messages.length);
+        displayMessages(messages);
+        updateLastUpdate();
+        
+    } catch (error) {
+        console.error('خطأ في جلب الرسائل:', error);
+    }
+}
+
+// =============== DISPLAY MESSAGES ===============
+function displayMessages(messages) {
+    const emailsList = document.getElementById('emailsList');
+    
+    if (!emailsList) {
+        console.warn('عنصر emailsList غير موجود');
+        return;
+    }
+    
     if (messages.length === 0) {
-        container.innerHTML = `
-            <div class="text-center text-muted">
-                <i class="fas fa-inbox fa-3x mb-3"></i>
-                <p>لا توجد رسائل حتى الآن</p>
-                <small>سيتم تحديث الرسائل تلقائياً كل 3 ثوان</small>
+        emailsList.innerHTML = `
+            <div class="alert alert-info text-center">
+                <i class="fas fa-inbox"></i> لا توجد رسائل حتى الآن
             </div>
         `;
         return;
     }
-
-    container.innerHTML = messages.map(msg => `
-        <div class="email-item ${msg.isRead ? '' : 'unread'}" data-message-id="${msg.id}">
-            <div class="email-from">
-                <i class="fas fa-user-circle"></i> ${msg.from || 'بدون مرسل'}
+    
+    let html = '';
+    messages.forEach((msg, index) => {
+        const subject = msg.subject || '(بدون موضوع)';
+        const from = msg.from?.address || 'Unknown';
+        const preview = msg.text ? msg.text.substring(0, 50) + '...' : 'No preview';
+        const time = new Date(msg.createdAt).toLocaleString('ar-EG');
+        
+        html += `
+            <div class="email-item" onclick="viewEmailDetails('${index}')">
+                <div class="email-sender">
+                    <strong>${from}</strong>
+                    <small class="email-time">${time}</small>
+                </div>
+                <div class="email-subject">${subject}</div>
+                <div class="email-preview">${preview}</div>
             </div>
-            <div class="email-subject">
-                ${msg.subject || '(بدون موضوع)'}
-            </div>
-            <div class="email-preview">
-                ${msg.text ? msg.text.substring(0, 100) : msg.html ? msg.html.substring(0, 100) : 'بدون محتوى'}...
-            </div>
-            <div class="email-time">
-                <i class="fas fa-clock"></i> ${formatDate(msg.createdAt)}
-            </div>
-        </div>
-    `).join('');
-}
-
-// =============== VIEW EMAIL DETAILS ===============
-async function viewEmailDetails(messageId) {
-    try {
-        const response = await fetch(`${MESSAGES_ENDPOINT}/${messageId}`, {
-            headers: {
-                'Authorization': `Bearer ${currentToken}`
-            }
-        });
-
-        if (!response.ok) throw new Error('Failed to fetch message details');
-
-        const message = await response.json();
-        selectedEmailId = messageId;
-
-        // Populate details
-        document.getElementById('emailFrom').textContent = message.from || 'بدون مرسل';
-        document.getElementById('emailSubject').textContent = message.subject || '(بدون موضوع)';
-        document.getElementById('emailDate').textContent = formatDate(message.createdAt);
-
-        // Handle body content
-        if (message.html) {
-            document.getElementById('emailBody').innerHTML = message.html;
-        } else if (message.text) {
-            document.getElementById('emailBody').innerHTML = `<pre style="white-space: pre-wrap; word-wrap: break-word;">${message.text}</pre>`;
-        } else {
-            document.getElementById('emailBody').innerHTML = '<p class="text-muted">لا يوجد محتوى</p>';
-        }
-
-        // Show details section
-        document.querySelector('.email-details').style.display = 'block';
-        document.querySelector('.email-details').scrollIntoView({ behavior: 'smooth' });
-
-        // Mark as read
-        const emailItem = document.querySelector(`[data-message-id="${messageId}"]`);
-        if (emailItem) {
-            emailItem.classList.remove('unread');
-        }
-
-    } catch (error) {
-        console.error('Error fetching message details:', error);
-        showToast('فشل تحميل تفاصيل الرسالة', 'error');
-    }
-}
-
-// =============== CLOSE EMAIL DETAILS ===============
-function closeEmailDetails() {
-    document.querySelector('.email-details').style.display = 'none';
-    selectedEmailId = null;
-}
-
-// =============== COPY EMAIL ===============
-async function copyEmail() {
-    if (!currentEmail) return;
-
-    try {
-        await navigator.clipboard.writeText(currentEmail);
-        showToast('✓ تم نسخ البريد بنجاح', 'success');
-    } catch (error) {
-        // Fallback for older browsers
-        const textArea = document.createElement('textarea');
-        textArea.value = currentEmail;
-        document.body.appendChild(textArea);
-        textArea.select();
-        document.execCommand('copy');
-        document.body.removeChild(textArea);
-        showToast('✓ تم نسخ البريد بنجاح', 'success');
-    }
-}
-
-// =============== DELETE EMAIL ===============
-async function deleteCurrentEmail() {
-    if (!confirm('هل أنت متأكد من رغبتك في حذف هذا البريد؟')) return;
-
-    showLoading('جاري حذف البريد...');
-    try {
-        if (currentAccountId && currentToken) {
-            const response = await fetch(`${ACCOUNTS_ENDPOINT}/${currentAccountId}`, {
-                method: 'DELETE',
-                headers: {
-                    'Authorization': `Bearer ${currentToken}`
-                }
-            });
-
-            if (!response.ok) throw new Error('Failed to delete account');
-        }
-
-        // Generate new email
-        await generateNewEmail();
-        showToast('✓ تم حذف البريد بنجاح', 'success');
-
-    } catch (error) {
-        console.error('Error deleting email:', error);
-        showToast('فشل حذف البريد', 'error');
-    } finally {
-        hideLoading();
-    }
-}
-
-// =============== AUTO REFRESH TOGGLE ===============
-function toggleAutoRefresh() {
-    autoRefreshActive = !autoRefreshActive;
-    const btn = document.getElementById('autoRefreshBtn');
-
-    if (autoRefreshActive) {
-        btn.classList.add('active');
-        btn.style.background = 'linear-gradient(135deg, #10b981 0%, #059669 100%)';
-        autoRefreshInterval = setInterval(() => {
-            fetchMessages();
-        }, 3000);
-        showToast('✓ تم تفعيل التحديث التلقائي', 'success');
-    } else {
-        btn.classList.remove('active');
-        btn.style.background = '';
-        clearInterval(autoRefreshInterval);
-        showToast('✓ تم إيقاف التحديث التلقائي', 'info');
-    }
-}
-
-// =============== START MESSAGE REFRESH ===============
-function startMessageRefresh() {
-    // Refresh every 3 seconds by default
-    messageRefreshInterval = setInterval(() => {
-        fetchMessages();
-    }, 3000);
+        `;
+    });
+    
+    emailsList.innerHTML = html;
 }
 
 // =============== UTILITY FUNCTIONS ===============
@@ -320,107 +277,137 @@ function generateRandomUsername() {
     return username;
 }
 
-function formatDate(dateString) {
-    const date = new Date(dateString);
-    const now = new Date();
-    const diff = now - date;
-
-    // Less than a minute
-    if (diff < 60000) return 'الآن';
-
-    // Less than an hour
-    if (diff < 3600000) {
-        const minutes = Math.floor(diff / 60000);
-        return `قبل ${minutes} دقيقة`;
+function generateRandomPassword() {
+    const length = 12;
+    const charset = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*';
+    let password = '';
+    for (let i = 0; i < length; i++) {
+        password += charset.charAt(Math.floor(Math.random() * charset.length));
     }
+    return password;
+}
 
-    // Less than a day
-    if (diff < 86400000) {
-        const hours = Math.floor(diff / 3600000);
-        return `قبل ${hours} ساعة`;
+function copyEmailToClipboard() {
+    if (!currentEmail) {
+        showToast('لا يوجد بريد للنسخ', 'warning');
+        return;
     }
-
-    // Format as date
-    return date.toLocaleDateString('ar-EG', {
-        year: 'numeric',
-        month: 'short',
-        day: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit'
+    
+    navigator.clipboard.writeText(currentEmail).then(() => {
+        showToast('✅ تم نسخ البريد', 'success');
+        document.getElementById('copyBtn').innerHTML = '<i class="fas fa-check"></i>';
+        setTimeout(() => {
+            document.getElementById('copyBtn').innerHTML = '<i class="fas fa-copy"></i>';
+        }, 2000);
+    }).catch(() => {
+        showToast('❌ فشل النسخ', 'error');
     });
 }
 
-function updateTimeRemaining() {
-    const interval = setInterval(() => {
-        if (!emailExpireTime || !currentEmail) {
-            clearInterval(interval);
-            return;
+function toggleAutoRefresh(e) {
+    autoRefreshEnabled = e.target.checked;
+    
+    if (autoRefreshEnabled) {
+        showToast('✅ تم تفعيل التحديث التلقائي', 'success');
+        messageRefreshInterval = setInterval(() => {
+            loadMessages();
+        }, 3000);
+    } else {
+        showToast('⏸️ تم إيقاف التحديث التلقائي', 'info');
+        if (messageRefreshInterval) {
+            clearInterval(messageRefreshInterval);
         }
+    }
+    
+    localStorage.setItem('autoRefresh', autoRefreshEnabled);
+}
 
-        const now = new Date();
-        const remaining = emailExpireTime - now;
+function saveEmailToStorage() {
+    if (localStorage) {
+        localStorage.setItem('tempmail_email', currentEmail);
+        localStorage.setItem('tempmail_emailId', currentEmailId);
+        localStorage.setItem('tempmail_token', currentToken);
+        localStorage.setItem('tempmail_password', currentPassword);
+        localStorage.setItem('tempmail_timestamp', Date.now());
+    }
+}
 
-        if (remaining <= 0) {
-            document.getElementById('timeRemaining').textContent = 'انتهت الصلاحية';
-            clearInterval(interval);
-            return;
+function loadEmailFromStorage() {
+    if (localStorage) {
+        const savedEmail = localStorage.getItem('tempmail_email');
+        const timestamp = localStorage.getItem('tempmail_timestamp');
+        const now = Date.now();
+        
+        // Email expires after 1 hour
+        if (savedEmail && timestamp && (now - parseInt(timestamp)) < 3600000) {
+            currentEmail = savedEmail;
+            currentEmailId = localStorage.getItem('tempmail_emailId');
+            currentToken = localStorage.getItem('tempmail_token');
+            currentPassword = localStorage.getItem('tempmail_password');
+            console.log('تم استرجاع البريد المحفوظ:', currentEmail);
         }
-
-        const hours = Math.floor(remaining / 3600000);
-        const minutes = Math.floor((remaining % 3600000) / 60000);
-        const seconds = Math.floor((remaining % 60000) / 1000);
-
-        document.getElementById('timeRemaining').innerHTML = 
-            `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
-    }, 1000);
+    }
 }
 
 function updateLastUpdate() {
-    const now = new Date();
-    const timeString = now.toLocaleTimeString('ar-EG');
-    document.getElementById('lastUpdate').textContent = `آخر تحديث: ${timeString}`;
+    const now = new Date().toLocaleTimeString('ar-EG');
+    const element = document.getElementById('lastUpdate');
+    if (element) {
+        element.textContent = `آخر تحديث: ${now}`;
+    }
 }
 
-// =============== NOTIFICATION SYSTEM ===============
 function showToast(message, type = 'info') {
-    const toast = document.getElementById('toastNotification');
-    const toastBody = document.getElementById('toastBody');
-
-    toastBody.innerHTML = message;
-
-    // Change color based on type
-    toast.classList.remove('bg-success', 'bg-danger', 'bg-warning', 'bg-info');
-    switch (type) {
-        case 'success':
-            toast.classList.add('bg-success');
-            break;
-        case 'error':
-            toast.classList.add('bg-danger');
-            break;
-        case 'warning':
-            toast.classList.add('bg-warning');
-            break;
-        default:
-            toast.classList.add('bg-info');
+    const toastContainer = document.getElementById('toastContainer');
+    
+    if (!toastContainer) {
+        console.warn('عنصر toastContainer غير موجود');
+        alert(message);
+        return;
     }
-
-    const bsToast = new bootstrap.Toast(toast);
-    bsToast.show();
+    
+    const toastId = 'toast-' + Date.now();
+    const toastHTML = `
+        <div id="${toastId}" class="toast-message toast-${type}">
+            <span>${message}</span>
+            <button class="toast-close" onclick="this.parentElement.remove();">&times;</button>
+        </div>
+    `;
+    
+    toastContainer.insertAdjacentHTML('beforeend', toastHTML);
+    
+    setTimeout(() => {
+        const toast = document.getElementById(toastId);
+        if (toast) toast.remove();
+    }, 4000);
 }
 
 function showLoading(message = 'جاري التحميل...') {
-    document.getElementById('loadingText').textContent = message;
-    const modal = new bootstrap.Modal(document.getElementById('loadingModal'), { backdrop: 'static' });
-    modal.show();
+    const loader = document.getElementById('loader');
+    if (loader) {
+        loader.style.display = 'flex';
+        const loaderText = loader.querySelector('.loader-text');
+        if (loaderText) loaderText.textContent = message;
+    }
 }
 
 function hideLoading() {
-    const modal = bootstrap.Modal.getInstance(document.getElementById('loadingModal'));
-    if (modal) modal.hide();
+    const loader = document.getElementById('loader');
+    if (loader) loader.style.display = 'none';
 }
 
-// =============== CLEANUP ===============
-window.addEventListener('beforeunload', () => {
-    if (autoRefreshInterval) clearInterval(autoRefreshInterval);
-    if (messageRefreshInterval) clearInterval(messageRefreshInterval);
-});
+function viewEmailDetails(index) {
+    console.log('عرض تفاصيل البريد:', index);
+    showToast('تم النقر على البريد رقم ' + (index + 1), 'info');
+}
+
+// =============== EXPORTS ===============
+if (typeof module !== 'undefined' && module.exports) {
+    module.exports = {
+        createNewEmail,
+        loadMessages,
+        copyEmailToClipboard,
+        generateRandomUsername,
+        generateRandomPassword
+    };
+}
