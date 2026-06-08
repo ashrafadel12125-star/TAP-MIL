@@ -57,6 +57,35 @@ body {
     font-size: 1.8rem;
 }
 
+.nav-links {
+    display: flex;
+    gap: 1.5rem;
+    align-items: center;
+}
+
+.nav-link-header {
+    color: white;
+    text-decoration: none;
+    font-weight: 500;
+    transition: all 0.3s ease;
+    padding: 0.5rem 1rem;
+    border-radius: 5px;
+}
+
+.nav-link-header:hover {
+    background: rgba(255, 255, 255, 0.2);
+    transform: translateY(-2px);
+}
+
+.premium-link {
+    background: rgba(255, 255, 255, 0.2);
+    border: 2px solid rgba(255, 255, 255, 0.5);
+}
+
+.admin-link {
+    font-size: 1.2rem;
+}
+
 /* =============== MAIN CONTAINER =============== */
 .main-container {
     padding: 2rem 1rem;
@@ -292,6 +321,46 @@ body {
     margin: 1rem 0;
 }
 
+/* =============== ARTICLES SECTION =============== */
+.articles-card {
+    border: 1px solid var(--border-color);
+    border-radius: 15px;
+}
+
+.articles-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+    gap: 1.5rem;
+}
+
+.article-card {
+    background: white;
+    border: 1px solid var(--border-color);
+    border-radius: 10px;
+    padding: 1.5rem;
+    transition: all 0.3s ease;
+    cursor: pointer;
+}
+
+.article-card:hover {
+    transform: translateY(-5px);
+    box-shadow: var(--shadow-lg);
+    border-color: var(--primary-color);
+}
+
+.article-card h6 {
+    color: var(--text-primary);
+    font-weight: 700;
+    margin-bottom: 0.75rem;
+    line-height: 1.4;
+}
+
+.article-card p {
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+    margin-bottom: 1rem;
+}
+
 /* =============== AD SPACES =============== */
 .ad-space {
     background: white;
@@ -335,6 +404,14 @@ footer ul li {
 footer ul li:hover {
     color: var(--primary-color);
     transform: translateX(5px);
+}
+
+footer a {
+    transition: all 0.3s ease;
+}
+
+footer a:hover {
+    color: var(--primary-color) !important;
 }
 
 footer p {
@@ -414,6 +491,15 @@ footer p {
         font-size: 1.2rem;
     }
 
+    .nav-links {
+        gap: 0.75rem;
+    }
+
+    .nav-link-header {
+        padding: 0.4rem 0.8rem;
+        font-size: 0.9rem;
+    }
+
     .control-card {
         padding: 1.5rem;
     }
@@ -432,6 +518,10 @@ footer p {
         padding: 1rem;
     }
 
+    .articles-grid {
+        grid-template-columns: 1fr;
+    }
+
     .main-container {
         padding: 0.5rem;
     }
@@ -444,6 +534,11 @@ footer p {
 
     .navbar-brand {
         font-size: 1rem;
+    }
+
+    .nav-links {
+        flex-wrap: wrap;
+        gap: 0.5rem;
     }
 
     .control-card {
@@ -473,6 +568,18 @@ footer p {
 
     .ad-space {
         min-height: 200px;
+    }
+
+    footer .row {
+        text-align: center;
+    }
+
+    footer ul {
+        padding-left: 0;
+    }
+
+    footer li {
+        margin-bottom: 0.5rem;
     }
 }
 
@@ -505,6 +612,10 @@ footer p {
 
 .control-card {
     animation: slideIn 0.5s ease;
+}
+
+.article-card {
+    animation: fadeIn 0.5s ease;
 }
 
 /* =============== UTILITY CLASSES =============== */
